@@ -53,3 +53,5 @@ html,body,#root{width:100%;max-width:100%;overflow-x:clip}
 .player-comparison{padding:10px;border-radius:9px;background:#e1f0e7;font-size:13px}
 .playing-card.selected{outline:3px solid #ffcc45;outline-offset:-2px;background:#fff3c5;transform:translateY(-3px)}
 @media(max-width:390px){.ai-choice{padding:9px}.ai-choice .advice-row span{font-size:13px;letter-spacing:0}}
+
+.ai-match-note{border:1px solid #69bd9e;border-radius:10px;padding:12px;background:rgba(105,189,158,.13);line-height:1.6}
