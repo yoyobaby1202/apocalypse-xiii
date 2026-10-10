@@ -44,3 +44,12 @@ html,body,#root{width:100%;max-width:100%;overflow-x:clip}
 .cancel-selection{background:#ffe2a5;border-color:#e7c174}
 @media(max-width:390px){main{padding:9px 7px 30px}.zone{padding:8px;margin:8px 0}.pool-cards{gap:3px}.playing-card{font-size:clamp(13px,4vw,18px);border-width:1px}.zone-cards .playing-card,.zone-cards .empty{min-height:52px}.pool-cards .playing-card,.pool-cards .empty{min-height:47px}.title{flex-wrap:wrap}.title h1{font-size:18px}}
 @media(min-width:600px){.pool-cards{grid-template-columns:repeat(7,minmax(0,1fr))}}
+
+/* v0.7.2 dual scoring analysis and multi-select */
+.ai-choice{margin:14px 0;padding:13px;border:1px solid #a7cdb9;border-radius:12px;background:#f7fbf7;color:#174d3b}
+.ai-choice h3{margin:0 0 8px;font-size:17px}
+.ai-choice p{line-height:1.55;font-size:13px}
+.ai-choice .compare-summary>div{background:#205447;color:#fff}
+.player-comparison{padding:10px;border-radius:9px;background:#e1f0e7;font-size:13px}
+.playing-card.selected{outline:3px solid #ffcc45;outline-offset:-2px;background:#fff3c5;transform:translateY(-3px)}
+@media(max-width:390px){.ai-choice{padding:9px}.ai-choice .advice-row span{font-size:13px;letter-spacing:0}}
