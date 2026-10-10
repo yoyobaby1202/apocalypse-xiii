@@ -38,10 +38,19 @@ function evaluate(cards:Card[]):Score | null {
 function compare(a:Score,b:Score){if(a.category!==b.category)return a.category-b.category;for(let i=0;i<Math.max(a.tie.length,b.tie.length);i++){const d=(a.tie[i]||0)-(b.tie[i]||0);if(d)return d;}return 0;}
 type Metrics = { rates: number[]; expected: number; expectedNoShoot: number; shootRate: number; shotRate: number };
 type Suggestion = {alternative?: Suggestion; mode?:"normal"|"deep"; legalCount?:number; finalists?:number; pilotSamples?:number; hands:Hands; front:Score; middle:Score; back:Score; value:number; expected:number; expectedNoShoot:number; rates:number[]; shootRate:number; shotRate:number; samples:number; elapsedMs:number; player?: (Metrics & {valid:boolean;error?:string}) | null};
+// Compare the actual 3/5/5 card allocation, independent of display order.
+function sameArrangement(a:Suggestion,b:Suggestion):boolean {
+  return (['front','middle','back'] as const).every(zone => {
+    const left=a.hands[zone].map(card=>card.id).sort();
+    const right=b.hands[zone].map(card=>card.id).sort();
+    return left.length===right.length && left.every((id,i)=>id===right[i]);
+  });
+}
 function cardText(cards:Card[]){return cards.map(c=>`${names[c.rank]||c.rank}${c.suit}`).join('  ');}
 function App(){
   const [hands,setHands]=useState<Hands>(deal);
   const [suggestion,setSuggestion]=useState<Suggestion|null>(null);
+  const sameAiArrangement=!!(suggestion?.alternative && sameArrangement(suggestion,suggestion.alternative));
   const [busy,setBusy]=useState(false);
   const [selected,setSelected]=useState<{zone:Zone;ids:string[]}|null>(null);
   const [message,setMessage]=useState('先點選一張牌，再點選要放入的墩位。');
@@ -125,11 +134,12 @@ function App(){
     <button className="deep-button" onClick={analyze} disabled={busy || hands.front.length!==3 || hands.middle.length!==5 || hands.back.length!==5}>{busy?'🔍 AI 深度分析中…':'🔍 AI分析建議排法'}</button>
     <p className="deep-help">請先排滿頭墩 3 張、中墩 5 張、尾墩 5 張，才能使用 AI分析建議排法。系統遍歷合法排法並分階段篩選，以 3,000 次對手比較評估候選；結果不保證是真實對戰的絕對最佳解。</p>
     {suggestion&&<section className="advice" aria-label="雙 AI 建議排法">
-      <h2>⚔️ 雙 AI 分析建議</h2>
+      <h2>⚔️ AI 分析建議</h2>
       <p>同一批 {suggestion.samples} 次模擬對手，分別搜尋「包含打槍」與「不包含打槍」的高分排法。共檢查 {suggestion.legalCount?.toLocaleString()??'多種'} 種合法排法；候選初篩為近似搜尋，不保證全域最佳。</p>
-      {([suggestion,suggestion.alternative].filter(Boolean) as Suggestion[]).map((choice,i)=><div className="ai-choice" key={i}>
-        <h3>{i===0?'🅰️ AI A｜包含打槍':'🅱️ AI B｜不包含打槍'}</h3>
-        <p>{i===0?'三墩全贏 +6、全輸 −6':'三墩全贏 +3、全輸 −3'}；其他每墩勝 +1、輸 −1、平 0。</p>
+      {sameAiArrangement&&<p className="ai-match-note">✅ 含打槍與不含打槍的 AI 推薦排法相同，因此合併顯示一套；下方仍保留兩種計分的預期得分。</p>}
+      {([suggestion,...(sameAiArrangement?[]:[suggestion.alternative])].filter(Boolean) as Suggestion[]).map((choice,i)=><div className="ai-choice" key={i}>
+        <h3>{sameAiArrangement?'✅ 兩種計分模式共同推薦':i===0?'🅰️ AI A｜包含打槍':'🅱️ AI B｜不包含打槍'}</h3>
+        <p>{sameAiArrangement?'兩種計分方式的推薦排法一致；含打槍全贏 +6、全輸 −6，不含打槍全贏 +3、全輸 −3；其他每墩勝 +1、輸 −1、平 0。':`${i===0?'三墩全贏 +6、全輸 −6':'三墩全贏 +3、全輸 −3'}；其他每墩勝 +1、輸 −1、平 0。`}</p>
         {(['front','middle','back'] as const).map(zone=><div className="advice-row" key={zone}><strong>{labels[zone]}（{zone==='front'?choice.front.name:zone==='middle'?choice.middle.name:choice.back.name}）</strong><span>{cardText(choice.hands[zone])}</span></div>)}
         <div className="compare-summary">
           <div><small>含打槍預期得分</small><strong>{choice.expected>=0?'+':''}{choice.expected.toFixed(2)}</strong></div>
@@ -142,7 +152,7 @@ function App(){
           <p>含打槍 {choice.player.expected.toFixed(2)} 分／不含打槍 {choice.player.expectedNoShoot.toFixed(2)} 分</p>
           <p>本 AI 相對你的改善：{((i===0?choice.expected:choice.expectedNoShoot)-(i===0?choice.player.expected:choice.player.expectedNoShoot)).toFixed(2)} 分／對手</p>
         </div>}
-        <button className="apply" onClick={()=>useSuggestion(choice)}>套用 AI {i===0?'A（含打槍）':'B（不含打槍）'} 排法</button>
+        <button className="apply" onClick={()=>useSuggestion(choice)}>{sameAiArrangement?'套用共同推薦排法':`套用 AI ${i===0?'A（含打槍）':'B（不含打槍）'} 排法`}</button>
       </div>)}
       {suggestion.player&&!suggestion.player.valid&&<p>{suggestion.player.error}</p>}
       <p>模擬比較 {suggestion.samples} 次 · 耗時 {(suggestion.elapsedMs/1000).toFixed(2)} 秒。兩套使用相同模擬對手；對手為簡化模型，不代表實戰保證勝率。</p>
