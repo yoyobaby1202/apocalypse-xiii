@@ -2,7 +2,7 @@ type Card = { id: string; rank: number; suit: string };
 type Score = { category: number; tie: number[]; name: string };
 type Hands = { pool: Card[]; front: Card[]; middle: Card[]; back: Card[] };
 type AnalysisRequest = { cards: Card[]; player?: Hands | null; mode?: "normal" | "deep" };
-type Metrics = { rates: number[]; expected: number; shootRate: number; shotRate: number };
+type Metrics = { rates: number[]; expected: number; expectedNoShoot: number; shootRate: number; shotRate: number };
 
 type Candidate = { front: number; middle: number; back: number; heuristic: number };
 const FULL = 8191;
@@ -113,6 +113,7 @@ function matchPoints(a: Score[], b: Score[]) {
 function metrics(mine: Score[], opponents: Score[][]): Metrics {
   const wins = [0, 0, 0];
   let totalPoints = 0;
+  let totalNoShoot = 0;
   let shoots = 0;
   let shots = 0;
   for (const opponent of opponents) {
@@ -122,6 +123,7 @@ function metrics(mine: Score[], opponents: Score[][]): Metrics {
     }
     const match = matchPoints(mine, opponent);
     totalPoints += match.points;
+    totalNoShoot += mine.reduce((sum, score, i) => sum + Math.sign(compare(score, opponent[i])), 0);
     if (match.shoot) shoots++;
     if (match.shot) shots++;
   }
@@ -129,6 +131,7 @@ function metrics(mine: Score[], opponents: Score[][]): Metrics {
   return {
     rates: wins.map(w => w / n),
     expected: totalPoints / n,
+    expectedNoShoot: totalNoShoot / n,
     shootRate: shoots / n,
     shotRate: shots / n
   };
@@ -141,7 +144,7 @@ function scoreNumber(s: Score): number {
   return result;
 }
 type DeepItem = { front: number; middle: number; back: number; pilot: number };
-function deepCandidates(cards: Card[], pilotOpponents: Score[][], limit = 240) {
+function deepCandidates(cards: Card[], pilotOpponents: Score[][], limit = 240, withShoot = true) {
   const p = prepare(cards);
   const nums = new Float64Array(8192);
   for (const mask of [...p.three, ...p.five]) nums[mask] = scoreNumber(p.scores[mask]!);
@@ -187,7 +190,7 @@ function deepCandidates(cards: Card[], pilotOpponents: Score[][], limit = 240) {
         const a = fn > o[0] ? 1 : fn < o[0] ? -1 : 0;
         const c = mn > o[1] ? 1 : mn < o[1] ? -1 : 0;
         const d = bn > o[2] ? 1 : bn < o[2] ? -1 : 0;
-        points += a === 1 && c === 1 && d === 1 ? 6 : a === -1 && c === -1 && d === -1 ? -6 : a + c + d;
+        points += withShoot && a === 1 && c === 1 && d === 1 ? 6 : withShoot && a === -1 && c === -1 && d === -1 ? -6 : a + c + d;
       }
       push({front:f,middle:m,back:b,pilot:points});
     }
@@ -222,35 +225,35 @@ self.onmessage = (event: MessageEvent<AnalysisRequest>) => {
     if (cards.length !== 13 || new Set(cards.map(c => c.id)).size !== 13) throw Error('需要 13 張不重複的牌');
     const deep = mode === 'deep';
     const pilot = deep ? opponentBatch(cards, 15) : [];
-    const search = deep ? deepCandidates(cards, pilot) : bestCandidates(cards, 180, true);
+    const search = deep ? deepCandidates(cards, pilot, 240, true) : bestCandidates(cards, 180, true);
+    const searchPlain = deep ? deepCandidates(cards, pilot, 240, false) : search;
     const { p, best } = search;
-    if (!best.length) throw Error('找不到合法排法');
+    if (!best.length || !searchPlain.best.length) throw Error('找不到合法排法');
     const opponents = deep ? opponentBatch(cards, 1000) : opponentBatch(cards, 100);
     if (!opponents.length) throw Error('無法產生模擬對手');
-    const ranked = best.map(c => ({ c, ...metrics(getScores(p, c), opponents) }))
-      .sort((a, b) => b.expected - a.expected || b.c.heuristic - a.c.heuristic);
-    const winner = ranked[0];
-    const c = winner.c;
-    const hands: Hands = { pool: [], front: p.hands[c.front]!, middle: p.hands[c.middle]!, back: p.hands[c.back]! };
+    const choose = (candidates: Candidate[], withShoot: boolean) => {
+      const ranked = candidates.map(c => ({ c, ...metrics(getScores(p, c), opponents) }))
+        .sort((a,b) => (withShoot ? b.expected-a.expected : b.expectedNoShoot-a.expectedNoShoot) || b.c.heuristic-a.c.heuristic);
+      const winner = ranked[0];
+      const c = winner.c;
+      const hands: Hands = {pool:[],front:p.hands[c.front]!,middle:p.hands[c.middle]!,back:p.hands[c.back]!};
+      return {hands,front:p.scores[c.front],middle:p.scores[c.middle],back:p.scores[c.back],...winner};
+    };
+    const winner = choose(best,true);
+    const plainWinner = choose(searchPlain.best,false);
     let playerResult: (Metrics & { valid: boolean; error?: string }) | null = null;
     if (player) {
       const all = [...player.front, ...player.middle, ...player.back];
       if (player.front.length === 3 && player.middle.length === 5 && player.back.length === 5 &&
           new Set(all.map(c => c.id)).size === 13 && all.every(c => cards.some(owned => owned.id === c.id))) {
         const f = evaluate(player.front), m = evaluate(player.middle), b = evaluate(player.back);
-        if (compare(b, m) >= 0 && compare(m, f) >= 0) {
-          playerResult = { ...metrics([f, m, b], opponents), valid: true };
-        } else {
-          playerResult = { rates: [0, 0, 0], expected: 0, shootRate: 0, shotRate: 0, valid: false, error: '你的排牌倒水，無法計算合法勝率' };
-        }
+        if (compare(b,m)>=0 && compare(m,f)>=0) playerResult={...metrics([f,m,b],opponents),valid:true};
+        else playerResult={rates:[0,0,0],expected:0,expectedNoShoot:0,shootRate:0,shotRate:0,valid:false,error:'你的排牌倒水，無法計算合法勝率'};
       }
     }
-    self.postMessage({ result: {
-      hands, front: p.scores[c.front], middle: p.scores[c.middle], back: p.scores[c.back],
-      value: c.heuristic, expected: winner.expected, rates: winner.rates, shootRate: winner.shootRate, shotRate: winner.shotRate,
-      player: playerResult, samples: opponents.length, mode, legalCount: deep && "legalCount" in search ? search.legalCount : undefined, finalists: best.length, pilotSamples: pilot.length,
-      elapsedMs: Math.round(performance.now() - started)
-    } });
+    const shared = {player:playerResult,samples:opponents.length,mode,legalCount:deep && 'legalCount' in search ? search.legalCount : undefined,finalists:best.length,pilotSamples:pilot.length,elapsedMs:Math.round(performance.now()-started)};
+    const asResult = (w: ReturnType<typeof choose>) => ({hands:w.hands,front:w.front,middle:w.middle,back:w.back,value:w.c.heuristic,expected:w.expected,expectedNoShoot:w.expectedNoShoot,rates:w.rates,shootRate:w.shootRate,shotRate:w.shotRate,...shared});
+    self.postMessage({result:{...asResult(winner),alternative:asResult(plainWinner)}});
   } catch (error) {
     self.postMessage({ error: error instanceof Error ? error.message : String(error) });
   }
