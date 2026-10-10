@@ -54,7 +54,8 @@ function App(){
     setSelected(null);setMessage(`已將 ${names[card.rank]||card.rank}${card.suit} 放入${labels[to]}。`);
   };
   const tapCard=(zone:Zone,id:string)=>{
-    if(selected){move(selected.zone,selected.id,zone);return;}
+    if(selected?.zone===zone && selected.id===id){setSelected(null);setMessage('已取消選牌。');return;}
+    if(selected && selected.zone!==zone){move(selected.zone,selected.id,zone);return;}
     setSelected({zone,id});setMessage('已選牌，點擊其他墩位或牌即可移動。');
   };
   const tapZone=(zone:Zone)=>{if(selected)move(selected.zone,selected.id,zone);};
@@ -103,13 +104,18 @@ function App(){
     const score=evaluate(hands[zone]);
     return <section className="zone" onClick={()=>tapZone(zone)} key={zone}>
       <header><strong>{labels[zone]} <small>{hands[zone].length}/{caps[zone]}</small></strong><span>{score?.name||'尚未完成'}</span></header>
-      <div className="cards">{hands[zone].map(card=><button type="button" key={card.id} className={`playing-card ${card.suit==='♥'||card.suit==='♦'?'red':''} ${selected?.id===card.id?'selected':''}`} onClick={e=>{e.stopPropagation();tapCard(zone,card.id);}} aria-label={`${names[card.rank]||card.rank}${card.suit}`}><span>{names[card.rank]||card.rank}</span><span>{card.suit}</span></button>)}{Array.from({length:Math.max(0,caps[zone]-hands[zone].length)},(_,i)=><div className="empty" key={i}>+</div>)}</div>
+      <div className={`cards ${zone==='pool'?'pool-cards':'zone-cards'}`}>{hands[zone].map(card=><button type="button" key={card.id} className={`playing-card ${card.suit==='♥'||card.suit==='♦'?'red':''} ${selected?.id===card.id?'selected':''}`} onClick={e=>{e.stopPropagation();tapCard(zone,card.id);}} aria-label={`${names[card.rank]||card.rank}${card.suit}`}><span>{names[card.rank]||card.rank}</span><span>{card.suit}</span></button>)}{Array.from({length:Math.max(0,caps[zone]-hands[zone].length)},(_,i)=><div className="empty" key={i}>+</div>)}</div>
     </section>;
   };
-  return <main><div className="app"><div className="title"><h1>♠ 俊佑の十三支默示錄</h1><span>APOCALYPSE XIII · v0.7</span></div>
+  return <main><div className="app"><div className="title"><h1>♠ 俊佑の十三支默示錄</h1><span>APOCALYPSE XIII · v0.7.1</span></div>
     {renderZone('front')}{renderZone('middle')}{renderZone('back')}
     <div className="notice" role="status">{message}</div>
     {renderZone('pool')}
+    <div className="touch-controls" aria-label="觸控移牌操作">
+      <strong>{selected ? `已選擇 ${labels[selected.zone]}的 ${names[hands[selected.zone].find(c=>c.id===selected.id)?.rank||0]||hands[selected.zone].find(c=>c.id===selected.id)?.rank}${hands[selected.zone].find(c=>c.id===selected.id)?.suit}` : '① 點選上方任一張牌，② 點下方目標區域'}</strong>
+      <div className="touch-targets">{(['front','middle','back','pool'] as const).map(zone=><button key={zone} type="button" disabled={!selected || selected.zone===zone || hands[zone].length>=caps[zone]} onClick={()=>tapZone(zone)}>{zone==='pool'?'↩ 返回手牌':`→ ${labels[zone]} ${hands[zone].length}/${caps[zone]}`}</button>)}</div>
+      {selected&&<button type="button" className="cancel-selection" onClick={()=>setSelected(null)}>取消選取</button>}
+    </div>
     <div className="actions"><button onClick={reset}>重新發牌</button><button onClick={clear}>清空排牌</button><button className="primary" onClick={verify}>確認排牌</button></div>
     <button className="deep-button" onClick={analyze} disabled={busy || hands.front.length!==3 || hands.middle.length!==5 || hands.back.length!==5}>{busy?'🔍 AI 深度分析中…':'🔍 AI分析建議排法'}</button>
     <p className="deep-help">請先排滿頭墩 3 張、中墩 5 張、尾墩 5 張，才能使用 AI分析建議排法。系統遍歷合法排法並分階段篩選，以 3,000 次對手比較評估候選；結果不保證是真實對戰的絕對最佳解。</p>
@@ -156,7 +162,7 @@ function App(){
       <button className="apply" onClick={useSuggestion}>套用建議排法</button>
     </section>}
     <div className="rules-entry"><a href="/rules.html" target="_blank" rel="noopener noreferrer">📖 十三支遊戲規則與新手教學 ↗</a><p>新手也能快速上手：排牌、牌型大小、倒水與打槍計分。</p></div>
-    <p className="hint">玩法：先點牌，再點目標墩位。點已選牌可取消；點另一張牌可交換位置（目標墩位有空格時）。本版提供牌型檢查、AI 深度分析與每墩勝負估算。打槍雙倍已納入 AI 模擬預期得分；暫不支援特殊牌及全壘打。</p>
+    <p className="hint">玩法：點選一張牌，再按頭墩／中墩／尾墩；要取回牌就點已排的牌，再按返回手牌。點已選牌可取消；點同一區其他牌可改選。本版提供牌型檢查、AI 深度分析與每墩勝負估算。打槍雙倍已納入 AI 模擬預期得分；暫不支援特殊牌及全壘打。</p>
   </div></main>;
 }
 
