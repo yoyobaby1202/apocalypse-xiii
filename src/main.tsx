@@ -37,7 +37,7 @@ function evaluate(cards:Card[]):Score | null {
 }
 function compare(a:Score,b:Score){if(a.category!==b.category)return a.category-b.category;for(let i=0;i<Math.max(a.tie.length,b.tie.length);i++){const d=(a.tie[i]||0)-(b.tie[i]||0);if(d)return d;}return 0;}
 type Metrics = { rates: number[]; expected: number; expectedNoShoot: number; shootRate: number; shotRate: number };
-type Suggestion = {alternative?: Suggestion; mode?:"normal"|"deep"; legalCount?:number; finalists?:number; pilotSamples?:number; hands:Hands; front:Score; middle:Score; back:Score; value:number; expected:number; rates:number[]; shootRate:number; shotRate:number; samples:number; elapsedMs:number; player?: (Metrics & {valid:boolean;error?:string}) | null};
+type Suggestion = {alternative?: Suggestion; mode?:"normal"|"deep"; legalCount?:number; finalists?:number; pilotSamples?:number; hands:Hands; front:Score; middle:Score; back:Score; value:number; expected:number; expectedNoShoot:number; rates:number[]; shootRate:number; shotRate:number; samples:number; elapsedMs:number; player?: (Metrics & {valid:boolean;error?:string}) | null};
 function cardText(cards:Card[]){return cards.map(c=>`${names[c.rank]||c.rank}${c.suit}`).join('  ');}
 function App(){
   const [hands,setHands]=useState<Hands>(deal);
